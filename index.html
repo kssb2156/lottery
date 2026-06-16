@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Kanit', sans-serif; }
+        
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; }
+        .summary-box { text-align: center; padding: 10px; border: 2px solid #000; margin-bottom: 20px; font-weight: bold; }
+        
+        /* จัดการส่วนกรอกค่า */
+        .controls { text-align: center; margin-bottom: 20px; padding: 10px; background: #eee; border-radius: 8px; }
+        .controls input { padding: 5px; width: 100px; text-align: center; }
+
+        .wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #333 !important; color: #fff; border: 1px solid #000; padding: 8px; }
+        td { border: 1px solid #666; padding: 6px; text-align: center; }
+        
+        .highlight { background-color: yellow !important; }
+
+        .no-print { margin-bottom: 20px; text-align: center; padding: 10px; }
+        @media print { 
+            .no-print { display: none; }
+            th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .highlight { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print">
+    <div class="controls">
+        กำหนดเกณฑ์ไฮไลท์ยอดเกิน: <input type="number" id="limitInput" value="3000"> บาท
+        <br><br>
+        <input type="file" id="excelFile" accept=".xlsx, .xls">
+        <button onclick="window.print()" style="padding:10px 20px; cursor:pointer;">สั่งพิมพ์รายงาน</button>
+    </div>
+</div>
+
+<div class="header">
+    <h2>รายงานสรุปยอดหวย</h2>
+</div>
+
+<div class="summary-box">
+    ยอดเงินรวมทั้งหมด: <span id="grandTotal" style="color:red;">0</span> บาท
+</div>
+
+<div class="wrapper">
+    <table>
+        <thead><tr><th>เลข</th><th>จำนวน</th><th>ยอดเงิน</th></tr></thead>
+        <tbody id="body1"></tbody>
+    </table>
+    <table>
+        <thead><tr><th>เลข</th><th>จำนวน</th><th>ยอดเงิน</th></tr></thead>
+        <tbody id="body2"></tbody>
+    </table>
+</div>
+
+<script>
+    let currentData = []; // เก็บข้อมูลไว้แสดงผลใหม่เวลาเปลี่ยนเกณฑ์
+
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
+
+            let stats = Array(100).fill(null).map(() => ({count: 0, sum: 0}));
+            let grandTotal = 0;
+            currentData = [];
+
+            json.forEach(row => {
+                let n = parseInt(row[0]);
+                let a = parseFloat(row[1]);
+                if (!isNaN(n) && n >= 0 && n <= 99 && !isNaN(a)) {
+                    stats[n].count += 1;
+                    stats[n].sum += a;
+                    grandTotal += a;
+                }
+            });
+
+            document.getElementById('grandTotal').innerText = grandTotal.toLocaleString();
+            
+            for(let i=0; i<100; i++) {
+                if(stats[i].count > 0) currentData.push({n: i, ...stats[i]});
+            }
+            renderTable();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    // ฟังก์ชันวาดตารางใหม่เมื่อมีการเปลี่ยนตัวเลขเกณฑ์
+    function renderTable() {
+        const limit = parseFloat(document.getElementById('limitInput').value) || 0;
+        const renderRow = (d) => {
+            const isHighlight = d.sum > limit ? 'class="highlight"' : '';
+            return `<tr ${isHighlight}><td>${String(d.n).padStart(2,'0')}</td><td>${d.count}</td><td>${d.sum.toLocaleString()}</td></tr>`;
+        };
+
+        const mid = Math.ceil(currentData.length / 2);
+        document.getElementById('body1').innerHTML = currentData.slice(0, mid).map(renderRow).join('');
+        document.getElementById('body2').innerHTML = currentData.slice(mid).map(renderRow).join('');
+    }
+
+    // เพิ่ม Event Listener ให้ตารางอัปเดตทันทีเมื่อแก้ตัวเลข
+    document.getElementById('limitInput').addEventListener('input', renderTable);
+</script>
+</body>
+</html>
